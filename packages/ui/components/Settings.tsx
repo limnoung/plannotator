@@ -732,8 +732,27 @@ export const Settings: React.FC<SettingsProps> = ({ taterMode, onTaterModeChange
                                   mm: String(now.getMinutes()).padStart(2,'0'), ss: String(now.getSeconds()).padStart(2,'0'),
                                   ampm: h24 >= 12 ? 'pm' : 'am',
                                 };
-                                return fmt.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m) + '.md';
+                                let preview = fmt.replace(/\{(\w+)\}/g, (m, k) => vars[k] ?? m) + '.md';
+                                if (obsidian.filenameSeparator === 'dash') preview = preview.replace(/ /g, '-');
+                                else if (obsidian.filenameSeparator === 'underscore') preview = preview.replace(/ /g, '_');
+                                return preview;
                               })()}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs text-muted-foreground">Filename Separator</label>
+                            <select
+                              value={obsidian.filenameSeparator || 'space'}
+                              onChange={(e) => handleObsidianChange({ filenameSeparator: e.target.value as 'space' | 'dash' | 'underscore' })}
+                              className="w-full px-3 py-2 bg-muted rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                            >
+                              <option value="space">Spaces (default)</option>
+                              <option value="dash">Dashes (-)</option>
+                              <option value="underscore">Underscores (_)</option>
+                            </select>
+                            <div className="text-[10px] text-muted-foreground/70">
+                              Replaces spaces in the generated filename. Useful when working with CLI tools in your vault.
                             </div>
                           </div>
 
@@ -755,6 +774,27 @@ tags: [plan, ...]
                           </div>
 
                           <div className="border-t border-border/30" />
+
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-xs font-medium">Auto-save on Plan Arrival</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                Automatically save to Obsidian when a plan loads, before you approve or deny
+                              </div>
+                            </div>
+                            <button
+                              role="switch"
+                              aria-checked={obsidian.autoSave}
+                              onClick={() => handleObsidianChange({ autoSave: !obsidian.autoSave })}
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                                obsidian.autoSave ? 'bg-primary' : 'bg-muted'
+                              }`}
+                            >
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                                obsidian.autoSave ? 'translate-x-6' : 'translate-x-1'
+                              }`} />
+                            </button>
+                          </div>
 
                           <div className="flex items-center justify-between">
                             <div>

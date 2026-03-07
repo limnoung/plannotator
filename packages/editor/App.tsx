@@ -675,6 +675,49 @@ const App: React.FC = () => {
     setBlocks(parseMarkdownToBlocks(markdown));
   }, [markdown]);
 
+  // Auto-save to Obsidian on plan arrival (if enabled)
+  const autoSaveAttempted = useRef(false);
+  useEffect(() => {
+    if (!isApiMode || !markdown || isSharedSession || annotateMode) return;
+    if (autoSaveAttempted.current) return;
+
+    const obsSettings = getObsidianSettings();
+    if (!obsSettings.autoSave || !obsSettings.enabled) return;
+
+    const vaultPath = getEffectiveVaultPath(obsSettings);
+    if (!vaultPath) return;
+
+    autoSaveAttempted.current = true;
+
+    const body = {
+      obsidian: {
+        vaultPath,
+        folder: obsSettings.folder || 'plannotator',
+        plan: markdown,
+        ...(obsSettings.filenameFormat && { filenameFormat: obsSettings.filenameFormat }),
+        ...(obsSettings.filenameSeparator && obsSettings.filenameSeparator !== 'space' && { filenameSeparator: obsSettings.filenameSeparator }),
+      },
+    };
+
+    fetch('/api/save-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.results?.obsidian?.success) {
+          setNoteSaveToast({ type: 'success', message: 'Auto-saved to Obsidian' });
+        } else {
+          setNoteSaveToast({ type: 'error', message: 'Auto-save to Obsidian failed' });
+        }
+      })
+      .catch(() => {
+        setNoteSaveToast({ type: 'error', message: 'Auto-save to Obsidian failed' });
+      })
+      .finally(() => setTimeout(() => setNoteSaveToast(null), 3000));
+  }, [isApiMode, markdown, isSharedSession, annotateMode]);
+
   // Global paste listener for image attachments
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
@@ -767,6 +810,7 @@ const App: React.FC = () => {
           folder: obsidianSettings.folder || 'plannotator',
           plan: markdown,
           ...(obsidianSettings.filenameFormat && { filenameFormat: obsidianSettings.filenameFormat }),
+          ...(obsidianSettings.filenameSeparator && obsidianSettings.filenameSeparator !== 'space' && { filenameSeparator: obsidianSettings.filenameSeparator }),
         };
       }
 
@@ -980,6 +1024,7 @@ const App: React.FC = () => {
           folder: s.folder || 'plannotator',
           plan: markdown,
           ...(s.filenameFormat && { filenameFormat: s.filenameFormat }),
+          ...(s.filenameSeparator && s.filenameSeparator !== 'space' && { filenameSeparator: s.filenameSeparator }),
         };
       }
     }

@@ -14,6 +14,7 @@ export interface ObsidianConfig {
   folder: string;
   plan: string;
   filenameFormat?: string; // Custom format string, e.g. '{YYYY}-{MM}-{DD} - {title}'
+  filenameSeparator?: 'space' | 'dash' | 'underscore'; // Replace spaces in filename
 }
 
 export interface BearConfig {
@@ -98,8 +99,9 @@ export function extractTitle(markdown: string): string {
     // Clean up the title for use as filename
     return h1Match[1]
       .trim()
-      .replace(/[<>:"/\\|?*]/g, '') // Remove invalid filename chars
+      .replace(/[<>:"/\\|?*(){}\[\]#~`]/g, '') // Remove invalid/problematic filename chars
       .replace(/\s+/g, ' ')          // Normalize whitespace
+      .trim()                         // Re-trim after stripping
       .slice(0, 50);                 // Limit length
   }
   return 'Plan';
@@ -128,7 +130,7 @@ export const DEFAULT_FILENAME_FORMAT = '{title} - {Mon} {D}, {YYYY} {h}-{mm}{amp
  * Default format: '{title} - {Mon} {D}, {YYYY} {h}-{mm}{ampm}'
  * Example output: 'User Authentication - Jan 2, 2026 2-30pm.md'
  */
-export function generateFilename(markdown: string, format?: string): string {
+export function generateFilename(markdown: string, format?: string, separator?: 'space' | 'dash' | 'underscore'): string {
   const title = extractTitle(markdown);
   const now = new Date();
 
@@ -158,7 +160,14 @@ export function generateFilename(markdown: string, format?: string): string {
   const result = template.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match);
 
   // Sanitize: remove characters invalid in filenames
-  const sanitized = result.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, ' ').trim();
+  let sanitized = result.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, ' ').trim();
+
+  // Apply separator preference (replace spaces with dash or underscore)
+  if (separator === 'dash') {
+    sanitized = sanitized.replace(/ /g, '-');
+  } else if (separator === 'underscore') {
+    sanitized = sanitized.replace(/ /g, '_');
+  }
 
   return sanitized.endsWith('.md') ? sanitized : `${sanitized}.md`;
 }
@@ -245,7 +254,7 @@ export async function saveToObsidian(config: ObsidianConfig): Promise<Integratio
     mkdirSync(targetFolder, { recursive: true });
 
     // Generate filename and full path
-    const filename = generateFilename(plan, config.filenameFormat);
+    const filename = generateFilename(plan, config.filenameFormat, config.filenameSeparator);
     const filePath = join(targetFolder, filename);
 
     // Generate content with frontmatter and backlink

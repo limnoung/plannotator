@@ -125,6 +125,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         folder: obsidianSettings.folder || 'plannotator',
         plan: markdown,
         ...(obsidianSettings.filenameFormat && { filenameFormat: obsidianSettings.filenameFormat }),
+        ...(obsidianSettings.filenameSeparator && obsidianSettings.filenameSeparator !== 'space' && { filenameSeparator: obsidianSettings.filenameSeparator }),
       };
     }
     if (target === 'bear') {

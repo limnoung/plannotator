@@ -121,6 +121,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
   const modeRef = useRef<EditorMode>(mode);
   const onAddAnnotationRef = useRef(onAddAnnotation);
   const pendingSourceRef = useRef<any>(null);
+  const justCreatedIdRef = useRef<string | null>(null);
   const [toolbarState, setToolbarState] = useState<{
     element: HTMLElement;
     source: any;
@@ -260,6 +261,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
       highlighter.addClass('comment', source.id);
     }
 
+    justCreatedIdRef.current = newAnnotation.id;
     onAddAnnotationRef.current(newAnnotation);
   };
 
@@ -572,6 +574,52 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
     });
   }, [annotations]);
 
+  // Scroll to and focus the selected annotation's highlight in the content
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // Clear all previously focused highlights
+    containerRef.current.querySelectorAll('.annotation-highlight.focused').forEach(el => {
+      el.classList.remove('focused');
+    });
+
+    if (!selectedAnnotationId) return;
+
+    // Skip scroll+focus when annotation was just created (user is already looking at it)
+    if (justCreatedIdRef.current === selectedAnnotationId) {
+      justCreatedIdRef.current = null;
+      return;
+    }
+
+    // Find highlight elements: try web-highlighter first, then manual marks
+    const highlighter = highlighterRef.current;
+    let targetElements: Element[] = [];
+
+    if (highlighter) {
+      try {
+        const doms = highlighter.getDoms(selectedAnnotationId);
+        if (doms && doms.length > 0) {
+          targetElements = Array.from(doms);
+        }
+      } catch (e) {}
+    }
+
+    if (targetElements.length === 0) {
+      const manualMarks = containerRef.current.querySelectorAll(
+        `[data-bind-id="${selectedAnnotationId}"]`
+      );
+      if (manualMarks.length > 0) {
+        targetElements = Array.from(manualMarks);
+      }
+    }
+
+    if (targetElements.length === 0) return;
+
+    // Apply focused class to all elements and scroll the first one into view
+    targetElements.forEach(el => el.classList.add('focused'));
+    targetElements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [selectedAnnotationId]);
+
   const handleAnnotate = (type: AnnotationType) => {
     const highlighter = highlighterRef.current;
     if (!toolbarState || !highlighter) return;
@@ -622,6 +670,7 @@ export const Viewer = forwardRef<ViewerHandle, ViewerProps>(({
       images,
     };
 
+    justCreatedIdRef.current = newAnnotation.id;
     onAddAnnotationRef.current(newAnnotation);
     window.getSelection()?.removeAllRanges();
   };

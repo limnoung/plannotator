@@ -4,6 +4,7 @@ import { getSingularPatch, processFile } from '@pierre/diffs';
 import { CodeAnnotation, CodeAnnotationType, SelectedLineRange, DiffAnnotationMetadata } from '@plannotator/ui/types';
 import { useTheme } from '@plannotator/ui/components/ThemeProvider';
 import { CommentPopover } from '@plannotator/ui/components/CommentPopover';
+import { storage } from '@plannotator/ui/utils/storage';
 import { detectLanguage } from '../utils/detectLanguage';
 import { useAnnotationToolbar } from '../hooks/useAnnotationToolbar';
 import { FileHeader } from './FileHeader';
@@ -91,6 +92,57 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const { theme, colorTheme, resolvedMode } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const [fileCommentAnchor, setFileCommentAnchor] = useState<HTMLElement | null>(null);
+
+  // Resizable split pane — only applies when Pierre renders a two-column grid
+  // (files with both additions and deletions). Add-only or delete-only files
+  // render as a single column even in split mode.
+  const isSplitLayout = useMemo(() => {
+    if (diffStyle !== 'split') return false;
+    let hasAdd = false, hasDel = false;
+    for (const line of patch.split('\n')) {
+      if (line[0] === '+' && !line.startsWith('+++')) hasAdd = true;
+      else if (line[0] === '-' && !line.startsWith('---')) hasDel = true;
+      if (hasAdd && hasDel) return true;
+    }
+    return false;
+  }, [patch, diffStyle]);
+
+  const [splitRatio, setSplitRatio] = useState(() => {
+    const saved = storage.getItem('review-split-ratio');
+    const n = saved ? Number(saved) : NaN;
+    return !Number.isNaN(n) && n >= 0.2 && n <= 0.8 ? n : 0.5;
+  });
+  const splitRatioRef = useRef(splitRatio);
+  splitRatioRef.current = splitRatio;
+  const [isDraggingSplit, setIsDraggingSplit] = useState(false);
+
+  const handleSplitDragStart = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    setIsDraggingSplit(true);
+
+    const onMove = (e: PointerEvent) => {
+      const ratio = (e.clientX - rect.left) / rect.width;
+      setSplitRatio(Math.min(0.8, Math.max(0.2, ratio)));
+    };
+
+    const onUp = () => {
+      setIsDraggingSplit(false);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      storage.setItem('review-split-ratio', String(splitRatioRef.current));
+    };
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }, []);
+
+  const resetSplitRatio = useCallback(() => {
+    setSplitRatio(0.5);
+    storage.setItem('review-split-ratio', '0.5');
+  }, []);
 
   const toolbar = useAnnotationToolbar({ patch, filePath, onLineSelection, onAddAnnotation, onEditAnnotation });
 
@@ -295,6 +347,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           [data-file-info] { background-color: ${muted} !important; }
           [data-column-number] { background-color: ${bg} !important; }
           [data-diffs-header] [data-title] { display: none !important; }
+          [data-diff-type='split'][data-overflow='scroll'],
+          [data-diff-type='split'][data-overflow='wrap'] {
+            grid-template-columns: var(--split-left, 1fr) var(--split-right, 1fr) !important;
+          }
         `,
       });
     });
@@ -315,8 +371,24 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         onFileComment={setFileCommentAnchor}
       />
 
-      <div ref={containerRef} className="flex-1 overflow-auto relative" onMouseMove={toolbar.handleMouseMove}>
-      <div className="p-4">
+      <div ref={containerRef} className={`flex-1 overflow-auto relative ${isDraggingSplit ? 'select-none' : ''}`} onMouseMove={toolbar.handleMouseMove}>
+      {isSplitLayout && (
+        <div
+          className="absolute top-0 bottom-0 z-10 cursor-col-resize group"
+          style={{ left: `${splitRatio * 100}%`, width: 9, marginLeft: -4 }}
+          onPointerDown={handleSplitDragStart}
+          onDoubleClick={resetSplitRatio}
+        >
+          <div className="absolute inset-y-0 left-1/2 w-px bg-border group-hover:bg-primary/50 group-active:bg-primary/70 transition-colors" />
+        </div>
+      )}
+      <div
+        className="p-4"
+        style={isSplitLayout ? {
+          '--split-left': `${splitRatio}fr`,
+          '--split-right': `${1 - splitRatio}fr`,
+        } as React.CSSProperties : undefined}
+      >
         <FileDiff
           key={filePath}
           fileDiff={augmentedDiff}

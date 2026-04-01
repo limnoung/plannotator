@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect, useCallback, useState } from 'react';
+import React, { useMemo, useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react';
 import { FileDiff } from '@pierre/diffs/react';
 import { getSingularPatch, processFile } from '@pierre/diffs';
 import { CodeAnnotation, CodeAnnotationType, SelectedLineRange, DiffAnnotationMetadata } from '@plannotator/ui/types';
@@ -194,6 +194,15 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     });
     return result || fileDiff;
   }, [patch, filePath, oldPath, fileContents, fileDiff]);
+
+  const previousScrollFilePathRef = useRef(filePath);
+  useLayoutEffect(() => {
+    if (previousScrollFilePathRef.current !== filePath) {
+      // A new file should start from the top-left of the diff viewport.
+      containerRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      previousScrollFilePathRef.current = filePath;
+    }
+  }, [filePath]);
 
   // Clear pending selection when file changes
   const prevFilePathRef = useRef(filePath);

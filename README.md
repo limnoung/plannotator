@@ -6,27 +6,7 @@
 
 Interactive Plan & Code Review for AI Coding Agents. Mark up and refine your plans or code diffs using a visual UI, share for team collaboration, and seamlessly integrate with **Claude Code**, **Copilot CLI**, **Gemini CLI**, **OpenCode**, **Pi**, and **Codex**.
 
-**Plan Mode Demos:**
-<table>
-<tr>
-<td align="center" width="50%">
-<h3>Claude Code</h3>
-<a href="https://www.youtube.com/watch?v=a_AT7cEN_9I">
-<img src="apps/marketing/public/youtube.png" alt="Claude Code Demo" width="100%" />
-</a>
-<p><a href="https://www.youtube.com/watch?v=a_AT7cEN_9I">Watch Demo</a></p>
-</td>
-<td align="center" width="50%">
-<h3>OpenCode</h3>
-<a href="https://youtu.be/_N7uo0EFI-U">
-<img src="apps/marketing/public/youtube-opencode.png" alt="OpenCode Demo" width="100%" />
-</a>
-<p><a href="https://youtu.be/_N7uo0EFI-U">Watch Demo</a></p>
-</td>
-</tr>
-</table>
-
-**New:** [Code Review](https://x.com/backnotprop/status/2031145299738263567?s=20)
+This fork adds **Plastic SCM (Unity DevOps Version Control)** support — the code review feature now works with both Git and Plastic SCM repositories. The system auto-detects the VCS via `.plastic`/`.git` directory presence and routes through the appropriate provider.
 
 
 ### Features
@@ -34,9 +14,10 @@ Interactive Plan & Code Review for AI Coding Agents. Mark up and refine your pla
 <table>
 <tr><td><strong>Visual Plan Review</strong></td><td>Built-in hook</td><td>Approve or deny agent plans with inline annotations</td></tr>
 <tr><td><strong>Plan Diff</strong></td><td>Automatic</td><td>See what changed when the agent revises a plan</td></tr>
-<tr><td><strong>Code Review</strong></td><td><code>/plannotator-review</code></td><td>View git diffs or remote PRs. Package annotations and ask AI about the code as you review.</td></tr>
+<tr><td><strong>Code Review</strong></td><td><code>/plannotator-review</code></td><td>View git or Plastic SCM diffs, or remote PRs. Package annotations and ask AI about the code as you review.</td></tr>
 <tr><td><strong>Annotate Any File</strong></td><td><code>/plannotator-annotate</code></td><td>Annotate any markdown file and send feedback to your agent</td></tr>
 <tr><td><strong>Annotate Last Message</strong></td><td><code>/plannotator-last</code></td><td>Annotate the agent's last response and send structured feedback</td></tr>
+<tr><td><strong>Plastic SCM Support</strong></td><td>Auto-detect</td><td>Full code review support for Plastic SCM (Unity DevOps) repos via <code>cm</code> CLI</td></tr>
 </table>
 
 #### Sharing Plans
@@ -59,23 +40,26 @@ Plannotator lets you privately share plans, annotations, and feedback with colle
 - [Pi](#install-for-pi)
 - [Codex](#install-for-codex)
 
-## Install for Claude Code
+### Fork: Build from Source
 
-**Install the `plannotator` command:**
-
-**macOS / Linux / WSL:**
+This fork adds Plastic SCM support. To build locally:
 
 ```bash
-curl -fsSL https://plannotator.ai/install.sh | bash
+bun install
+bun run --cwd apps/review build && bun run build:hook
 ```
 
-**Windows PowerShell:**
+**Compile to a single binary (optional):**
 
-```powershell
-irm https://plannotator.ai/install.ps1 | iex
+```bash
+# macOS / Linux
+bun build apps/hook/server/index.ts --compile --outfile ~/.local/bin/plannotator
+
+# Windows
+bun build apps/hook/server/index.ts --compile --outfile plannotator.exe
 ```
 
-**Then in Claude Code:**
+**Use with Claude Code:**
 
 ```
 /plugin marketplace add backnotprop/plannotator
@@ -102,12 +86,24 @@ See [apps/hook/README.md](apps/hook/README.md) for detailed installation instruc
 
 ---
 
-## Install for Copilot CLI
+## Plastic SCM (Unity DevOps) Support
+
+This fork introduces a VCS abstraction layer so the code review feature works with both **Git** and **Plastic SCM** repositories.
+
+- **Auto-detection**: The system checks for `.plastic` or `.git` directories and routes through the appropriate provider
+- **`cm` CLI integration**: Uses the Plastic SCM `cm` command-line tool to compute pending changes and generate unified diffs
+- **No staging UI**: Since Plastic SCM doesn't have a staging area like Git, the stage/unstage UI is automatically hidden
+- **Browser heartbeat**: The review server auto-shuts down when the browser tab is closed (heartbeat-based lifecycle management)
+
+**Requirements**: The `cm` CLI must be available in your PATH. This is included with the Unity DevOps Version Control (Plastic SCM) installation.
+
+---
+
+## Install for Claude Code
 
 **Install the `plannotator` command:**
 
 **macOS / Linux / WSL:**
-
 ```bash
 curl -fsSL https://plannotator.ai/install.sh | bash
 ```
@@ -256,8 +252,4 @@ This project is licensed under either of
 
 at your option.
 
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in this project by you, as defined in the Apache-2.0 license,
-shall be dual licensed as above, without any additional terms or conditions.
+This fork is based on [backnotprop/plannotator](https://github.com/backnotprop/plannotator).

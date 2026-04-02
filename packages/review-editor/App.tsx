@@ -698,6 +698,17 @@ const ReviewApp: React.FC = () => {
     }
   }, [diffTypeSetupPending, aiCheckComplete, showAISetup]);
 
+  // Send heartbeat to keep server alive while browser tab is open.
+  // Server auto-shuts down ~30s after heartbeats stop (e.g. tab closed).
+  useEffect(() => {
+    // Immediately send first heartbeat, then every 3s
+    fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    const interval = setInterval(() => {
+      fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    }, 3_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleDiffStyleChange = useCallback((style: 'split' | 'unified') => {
     configStore.set('diffStyle', style);
   }, []);

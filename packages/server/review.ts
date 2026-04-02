@@ -342,6 +342,14 @@ export async function startReviewServer(
     resolveDecision = resolve;
   });
 
+  // Client heartbeat – auto-shutdown when browser disconnects.
+  // The frontend POSTs /api/heartbeat every 3s; once the first heartbeat
+  // arrives the monitor starts, and if no heartbeat is received within
+  // HEARTBEAT_TIMEOUT_MS the server resolves the decision and shuts down.
+  const HEARTBEAT_TIMEOUT_MS = 10_000;
+  let lastHeartbeat = 0; // 0 = no heartbeat received yet
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
   // Start server with retry logic
   let server: ReturnType<typeof Bun.serve> | null = null;
 
@@ -352,6 +360,12 @@ export async function startReviewServer(
 
         async fetch(req, server) {
           const url = new URL(req.url);
+
+          // API: Client heartbeat (keeps server alive while browser is open)
+          if (url.pathname === "/api/heartbeat" && req.method === "POST") {
+            lastHeartbeat = Date.now();
+            return Response.json({ ok: true });
+          }
 
           // API: Get diff content
           if (url.pathname === "/api/diff" && req.method === "GET") {
@@ -710,6 +724,20 @@ export async function startReviewServer(
   const exitHandler = () => agentJobs.killAll();
   process.once("exit", exitHandler);
 
+  // Start heartbeat monitor – only begins checking after the first
+  // heartbeat arrives (so slow page loads don't trigger early shutdown).
+  heartbeatTimer = setInterval(() => {
+    if (lastHeartbeat > 0 && Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+      resolveDecision({
+        approved: false,
+        feedback: "",
+        annotations: [],
+      });
+    }
+  }, 2_000);
+
   // Notify caller that server is ready
   if (onReady) {
     onReady(serverUrl, isRemote, port);
@@ -721,6 +749,7 @@ export async function startReviewServer(
     isRemote,
     waitForDecision: () => decisionPromise,
     stop: () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       process.removeListener("exit", exitHandler);
       agentJobs.killAll();
       aiSessionManager.disposeAll();

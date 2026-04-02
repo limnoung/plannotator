@@ -123,6 +123,14 @@ function isBinaryType(typeField: string): boolean {
 // Path helpers
 // ---------------------------------------------------------------------------
 
+/** Remove a single trailing empty string produced by splitting content that ends with \n */
+function stripTrailingEmpty(lines: string[]): string[] {
+  if (lines.length > 0 && lines[lines.length - 1] === "") {
+    return lines.slice(0, -1);
+  }
+  return lines;
+}
+
 /** Normalise backslashes to forward slashes */
 function normalizePath(p: string): string {
   return p.replace(/\\/g, "/");
@@ -158,8 +166,10 @@ export function createUnifiedDiff(
   const aPath = oldFilePath ?? filePath;
   const bPath = filePath;
 
-  const oldLines = oldContent != null ? oldContent.split("\n") : [];
-  const newLines = newContent != null ? newContent.split("\n") : [];
+  // Normalise line endings (CRLF → LF) and strip trailing newline to
+  // avoid phantom empty-string elements that skew hunk line counts.
+  const oldLines = oldContent != null ? stripTrailingEmpty(oldContent.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")) : [];
+  const newLines = newContent != null ? stripTrailingEmpty(newContent.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")) : [];
 
   const header = `diff --git a/${aPath} b/${bPath}\n`;
 
@@ -175,7 +185,11 @@ export function createUnifiedDiff(
     return "";
   }
 
-  return header + fromLine + toLine + hunks.join("");
+  // Join hunks and ensure exactly one trailing newline – extra blank lines
+  // at the end confuse @pierre/diffs (it counts them as context lines that
+  // don't match the hunk header).
+  const body = hunks.join("").replace(/\n+$/, "\n");
+  return header + fromLine + toLine + body;
 }
 
 /**
@@ -259,46 +273,37 @@ function computeHunks(oldLines: string[], newLines: string[]): string[] {
     }
   }
 
-  // Render hunks.
+  // Render hunks.  Build the body first, then derive counts from actual
+  // output so the header is always consistent with what follows.
   const result: string[] = [];
 
   for (const hunk of hunks) {
     if (hunk.edits.length === 0) continue;
 
-    let oldStart = Infinity;
-    let newStart = Infinity;
+    // Track 1-based line numbers by scanning edits.
+    let oldStart = -1;
+    let newStart = -1;
     let oldCount = 0;
     let newCount = 0;
+    let body = "";
 
     for (const e of hunk.edits) {
       if (e.type === "keep" || e.type === "remove") {
-        oldStart = Math.min(oldStart, e.oldIdx);
+        if (oldStart === -1) oldStart = e.oldIdx + 1;
         oldCount++;
       }
       if (e.type === "keep" || e.type === "add") {
-        newStart = Math.min(newStart, e.newIdx);
+        if (newStart === -1) newStart = e.newIdx + 1;
         newCount++;
       }
+      const prefix = e.type === "keep" ? " " : e.type === "remove" ? "-" : "+";
+      body += `${prefix}${e.line}\n`;
     }
 
-    // Unified diff line numbers are 1-based.
-    const os = oldCount > 0 ? oldStart + 1 : 0;
-    const ns = newCount > 0 ? newStart + 1 : 0;
-    const hunkHeader = `@@ -${os},${oldCount} +${ns},${newCount} @@\n`;
-    let body = "";
-    for (const e of hunk.edits) {
-      switch (e.type) {
-        case "keep":
-          body += ` ${e.line}\n`;
-          break;
-        case "remove":
-          body += `-${e.line}\n`;
-          break;
-        case "add":
-          body += `+${e.line}\n`;
-          break;
-      }
-    }
+    if (oldStart === -1) oldStart = 0;
+    if (newStart === -1) newStart = 0;
+
+    const hunkHeader = `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@\n`;
     result.push(hunkHeader + body);
   }
 
@@ -553,6 +558,7 @@ export function createPlasticProvider(runtime: PlasticRuntime): VcsProvider {
 
       switch (entry.status) {
         case "CO": // Checked out (modified)
+        case "CH": // Changed (modified without explicit checkout)
         case "AD": // Added (explicitly)
         case "LM": // Locally moved
         case "MV": {

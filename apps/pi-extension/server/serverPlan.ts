@@ -61,6 +61,7 @@ export interface PlanServerResult {
 	url: string;
 	waitForDecision: () => Promise<PlanReviewDecision>;
 	onDecision: (listener: (result: PlanReviewDecision) => void | Promise<void>) => () => void;
+	waitForClose: () => Promise<void>;
 	waitForDone?: () => Promise<void>;
 	stop: () => void;
 }
@@ -143,6 +144,11 @@ export async function startPlanReviewServer(options: {
 		}
 		return true;
 	};
+
+	let resolveClose!: () => void;
+	const closePromise = new Promise<void>((r) => {
+		resolveClose = r;
+	});
 
 	// Draft key for annotation persistence
 	const draftKey = options.mode !== "archive" ? contentHash(options.plan) : "";
@@ -449,6 +455,9 @@ export async function startPlanReviewServer(options: {
 			deleteDraft(draftKey);
 			publishDecision({ approved: false, feedback, savedPath });
 			json(res, { ok: true, savedPath });
+		} else if (url.pathname === "/api/close" && req.method === "POST") {
+			resolveClose();
+			json(res, { ok: true });
 		} else {
 			html(res, options.htmlContent);
 		}
@@ -468,6 +477,7 @@ export async function startPlanReviewServer(options: {
 				decisionListeners.delete(listener);
 			};
 		},
+		waitForClose: () => closePromise,
 		...(donePromise && { waitForDone: () => donePromise }),
 		stop: () => server.close(),
 	};

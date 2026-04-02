@@ -93,7 +93,8 @@ This fork introduces a VCS abstraction layer so the code review feature works wi
 - **Auto-detection**: The system checks for `.plastic` or `.git` directories and routes through the appropriate provider
 - **`cm` CLI integration**: Uses the Plastic SCM `cm` command-line tool to compute pending changes and generate unified diffs
 - **No staging UI**: Since Plastic SCM doesn't have a staging area like Git, the stage/unstage UI is automatically hidden
-- **Browser heartbeat**: The review server auto-shuts down when the browser tab is closed (heartbeat-based lifecycle management)
+- **Browser heartbeat** (Plastic SCM only): The review server stays alive while the browser tab is open (3s heartbeat) and auto-shuts down ~10s after the tab is closed
+- **Ctrl+Enter confirmation** (Plastic SCM only): Shows a confirmation dialog before submitting feedback to prevent accidental submission
 
 **Requirements**: The `cm` CLI must be available in your PATH. This is included with the Unity DevOps Version Control (Plastic SCM) installation.
 

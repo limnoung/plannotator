@@ -158,6 +158,7 @@ const ReviewApp: React.FC = () => {
   const [gitContext, setGitContext] = useState<GitContext | null>(null);
   const [agentCwd, setAgentCwd] = useState<string | null>(null);
   const [supportsStaging, setSupportsStaging] = useState(true);
+  const [vcsType, setVcsType] = useState<string | undefined>();
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
@@ -166,6 +167,7 @@ const ReviewApp: React.FC = () => {
   const [submitted, setSubmitted] = useState<'approved' | 'feedback' | 'exited' | false>(false);
   const [showApproveWarning, setShowApproveWarning] = useState(false);
   const [showExitWarning, setShowExitWarning] = useState(false);
+  const [showReviewConfirm, setShowReviewConfirm] = useState<'approve' | 'feedback' | false>(false);
   const [sharingEnabled, setSharingEnabled] = useState(true);
   const [repoInfo, setRepoInfo] = useState<{ display: string; branch?: string } | null>(null);
 
@@ -670,6 +672,7 @@ const ReviewApp: React.FC = () => {
           setViewedFiles(new Set(data.viewedFiles));
         }
         if (data.supportsStaging !== undefined) setSupportsStaging(data.supportsStaging);
+        if (data.vcsType) setVcsType(data.vcsType);
         if (data.error) setDiffError(data.error);
         if (data.isWSL) setIsWSL(true);
         // Mark diff type setup as pending on first run (local mode only)
@@ -698,16 +701,17 @@ const ReviewApp: React.FC = () => {
     }
   }, [diffTypeSetupPending, aiCheckComplete, showAISetup]);
 
-  // Send heartbeat to keep server alive while browser tab is open.
-  // Server auto-shuts down ~30s after heartbeats stop (e.g. tab closed).
+  // Send heartbeat to keep server alive while browser tab is open (Plastic SCM only).
+  // Server auto-shuts down ~10s after heartbeats stop (e.g. tab closed).
   useEffect(() => {
+    if (vcsType !== 'plastic') return;
     // Immediately send first heartbeat, then every 3s
     fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
     const interval = setInterval(() => {
       fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
     }, 3_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [vcsType]);
 
   const handleDiffStyleChange = useCallback((style: 'split' | 'unified') => {
     configStore.set('diffStyle', style);
@@ -1332,7 +1336,7 @@ const ReviewApp: React.FC = () => {
 
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (showExportModal || showNoAnnotationsDialog || showApproveWarning || showExitWarning) return;
+      if (showExportModal || showNoAnnotationsDialog || showApproveWarning || showExitWarning || showReviewConfirm) return;
       if (submitted || isSendingFeedback || isApproving || isExiting || isPlatformActioning) return;
       if (!origin) return; // Demo mode
 
@@ -1348,6 +1352,13 @@ const ReviewApp: React.FC = () => {
           setPlatformGeneralComment('');
           setPlatformCommentDialog({ action: 'comment' });
         }
+      } else if (vcsType === 'plastic') {
+        // Plastic SCM: show confirmation before approve/feedback
+        if (totalAnnotationCount === 0) {
+          setShowReviewConfirm('approve');
+        } else {
+          setShowReviewConfirm('feedback');
+        }
       } else {
         // Agent mode: No annotations → Approve, otherwise → Send Feedback
         if (totalAnnotationCount === 0) {
@@ -1361,10 +1372,10 @@ const ReviewApp: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    showExportModal, showNoAnnotationsDialog, showApproveWarning, showExitWarning,
+    showExportModal, showNoAnnotationsDialog, showApproveWarning, showExitWarning, showReviewConfirm,
     platformCommentDialog, platformGeneralComment,
     submitted, isSendingFeedback, isApproving, isExiting, isPlatformActioning,
-    origin, platformMode, platformUser, prMetadata, totalAnnotationCount,
+    origin, platformMode, platformUser, prMetadata, totalAnnotationCount, vcsType,
     handleApprove, handleSendFeedback, handlePlatformAction
   ]);
 
@@ -1932,6 +1943,29 @@ const ReviewApp: React.FC = () => {
           showCancel
         />
 
+        {/* Agent mode: confirm before sending feedback via Ctrl+Enter */}
+        <ConfirmDialog
+          isOpen={!!showReviewConfirm}
+          onClose={() => setShowReviewConfirm(false)}
+          onConfirm={() => {
+            const action = showReviewConfirm;
+            setShowReviewConfirm(false);
+            if (action === 'approve') {
+              handleApprove();
+            } else {
+              handleSendFeedback();
+            }
+          }}
+          title={showReviewConfirm === 'approve' ? 'Approve Changes?' : 'Send Feedback?'}
+          message={showReviewConfirm === 'approve'
+            ? 'Approve changes with no annotations?'
+            : `Send ${totalAnnotationCount} annotation${totalAnnotationCount !== 1 ? 's' : ''} as feedback?`}
+          confirmText={showReviewConfirm === 'approve' ? 'Approve' : 'Send'}
+          cancelText="Cancel"
+          variant={showReviewConfirm === 'approve' ? 'info' : 'info'}
+          showCancel
+        />
+
         {/* AI setup dialog — first-run only */}
         <AISetupDialog
           isOpen={showAISetup}
@@ -1972,6 +2006,7 @@ const ReviewApp: React.FC = () => {
                   : `${getAgentName(origin)} will address your review feedback.`
           }
           agentLabel={getAgentName(origin)}
+          notifyClose={vcsType === 'plastic'}
         />
 
         {/* Update notification */}

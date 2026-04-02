@@ -29,6 +29,7 @@ export interface AnnotateServerResult {
 	portSource: "env" | "remote-default" | "random";
 	url: string;
 	waitForDecision: () => Promise<{ feedback: string; annotations: unknown[]; exit?: boolean }>;
+	waitForClose: () => Promise<void>;
 	stop: () => void;
 }
 
@@ -63,6 +64,11 @@ export async function startAnnotateServer(options: {
 		exit?: boolean;
 	}>((r) => {
 		resolveDecision = r;
+	});
+
+	let resolveClose!: () => void;
+	const closePromise = new Promise<void>((r) => {
+		resolveClose = r;
 	});
 
 	// Draft key for annotation persistence
@@ -144,6 +150,9 @@ export async function startAnnotateServer(options: {
 				const message = err instanceof Error ? err.message : "Failed to process feedback";
 				json(res, { error: message }, 500);
 			}
+		} else if (url.pathname === "/api/close" && req.method === "POST") {
+			resolveClose();
+			json(res, { ok: true });
 		} else {
 			html(res, options.htmlContent);
 		}
@@ -156,6 +165,7 @@ export async function startAnnotateServer(options: {
 		portSource,
 		url: `http://localhost:${port}`,
 		waitForDecision: () => decisionPromise,
+		waitForClose: () => closePromise,
 		stop: () => server.close(),
 	};
 }

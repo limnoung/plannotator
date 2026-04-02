@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useAutoClose } from '../hooks/useAutoClose';
 
 // ---------------------------------------------------------------------------
@@ -29,10 +30,22 @@ interface CompletionOverlayProps {
   title: string;
   subtitle: string;
   agentLabel: string;
+  /** When true, sends a beacon to /api/close on page hide (Plastic SCM only). */
+  notifyClose?: boolean;
 }
 
-export function CompletionOverlay({ submitted, title, subtitle, agentLabel }: CompletionOverlayProps) {
+export function CompletionOverlay({ submitted, title, subtitle, agentLabel, notifyClose: shouldNotifyClose }: CompletionOverlayProps) {
   const { state, enableAndStart } = useAutoClose(!!submitted);
+
+  // Notify server when the browser window/tab is closed so it can shut down (Plastic SCM only)
+  useEffect(() => {
+    if (!submitted || !shouldNotifyClose) return;
+    const notifyClose = () => {
+      navigator.sendBeacon('/api/close', '{}');
+    };
+    window.addEventListener('pagehide', notifyClose);
+    return () => window.removeEventListener('pagehide', notifyClose);
+  }, [submitted, shouldNotifyClose]);
 
   if (!submitted) return null;
 

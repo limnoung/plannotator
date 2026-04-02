@@ -97,6 +97,7 @@ export interface ReviewServerResult {
 		agentSwitch?: string;
 		exit?: boolean;
 	}>;
+	waitForClose: () => Promise<void>;
 	stop: () => void;
 }
 
@@ -296,6 +297,11 @@ export async function startReviewServer(options: {
 		exit?: boolean;
 	}>((r) => {
 		resolveDecision = r;
+	});
+
+	let resolveClose!: () => void;
+	const closePromise = new Promise<void>((r) => {
+		resolveClose = r;
 	});
 
 	// AI provider setup (graceful — AI features degrade if SDK unavailable)
@@ -702,6 +708,9 @@ export async function startReviewServer(options: {
 				const message = err instanceof Error ? err.message : "Failed to process feedback";
 				json(res, { error: message }, 500);
 			}
+		} else if (url.pathname === "/api/close" && req.method === "POST") {
+			resolveClose();
+			json(res, { ok: true });
 		} else {
 			html(res, options.htmlContent);
 		}
@@ -722,6 +731,7 @@ export async function startReviewServer(options: {
 		url: serverUrl,
 		isRemote,
 		waitForDecision: () => decisionPromise,
+		waitForClose: () => closePromise,
 		stop: () => {
 			process.removeListener("exit", exitHandler);
 			agentJobs.killAll();

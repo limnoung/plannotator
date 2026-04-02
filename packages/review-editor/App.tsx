@@ -157,6 +157,7 @@ const ReviewApp: React.FC = () => {
   const [diffType, setDiffType] = useState<string>('uncommitted');
   const [gitContext, setGitContext] = useState<GitContext | null>(null);
   const [agentCwd, setAgentCwd] = useState<string | null>(null);
+  const [supportsStaging, setSupportsStaging] = useState(true);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
@@ -630,6 +631,8 @@ const ReviewApp: React.FC = () => {
         diffType?: string;
         gitContext?: GitContext;
         agentCwd?: string;
+        vcsType?: string;
+        supportsStaging?: boolean;
         sharingEnabled?: boolean;
         repoInfo?: { display: string; branch?: string };
         prMetadata?: PRMetadata;
@@ -666,6 +669,7 @@ const ReviewApp: React.FC = () => {
         if (data.viewedFiles && data.viewedFiles.length > 0) {
           setViewedFiles(new Set(data.viewedFiles));
         }
+        if (data.supportsStaging !== undefined) setSupportsStaging(data.supportsStaging);
         if (data.error) setDiffError(data.error);
         if (data.isWSL) setIsWSL(true);
         // Mark diff type setup as pending on first run (local mode only)
@@ -883,6 +887,7 @@ const ReviewApp: React.FC = () => {
   const { stagedFiles, stagingFile, canStageFiles: canStageRaw, stageFile, resetStagedFiles, stageError } = useGitAdd({
     activeDiffBase,
     onFileViewed: handleFileViewedFromStage,
+    supportsStaging,
   });
   // Staging is never available in PR review mode — the server rejects it and the UI shouldn't offer it.
   const canStageFiles = canStageRaw && !prMetadata;

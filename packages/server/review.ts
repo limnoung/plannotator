@@ -123,7 +123,7 @@ export async function startReviewServer(
   // Mutable state for diff switching
   let currentPatch = options.rawPatch;
   let currentGitRef = options.gitRef;
-  let currentDiffType: DiffType = options.diffType || "uncommitted";
+  let currentDiffType: string = options.diffType || "uncommitted";
   let currentError = options.error;
 
   // Agent jobs — background process manager (late-binds serverUrl via getter)
@@ -361,6 +361,8 @@ export async function startReviewServer(
               origin,
               diffType: hasLocalAccess ? currentDiffType : undefined,
               gitContext: hasLocalAccess ? gitContext : undefined,
+              vcsType: gitContext?.vcsType,
+              supportsStaging: gitContext?.supportsStaging ?? true,
               sharingEnabled,
               shareBaseUrl,
               repoInfo,

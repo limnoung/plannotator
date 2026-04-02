@@ -2,8 +2,8 @@
  * VCS dispatch layer
  *
  * Provides a provider-based abstraction over version control systems.
- * Each VCS (Git, P4, etc.) registers as a provider. The dispatch layer
- * auto-detects the active VCS and routes operations accordingly.
+ * Each VCS (Git, P4, Plastic SCM, etc.) registers as a provider. The dispatch
+ * layer auto-detects the active VCS and routes operations accordingly.
  *
  * To add a new VCS:
  * 1. Implement the VcsProvider interface
@@ -32,6 +32,17 @@ import {
   runP4Diff,
   getP4FileContentsForDiff,
 } from "./p4";
+
+import { detectVcsType } from "@plannotator/shared/vcs-detect";
+import {
+  createPlasticProvider,
+  type PlasticRuntime,
+} from "@plannotator/shared/plastic-provider";
+import type {
+  VcsProvider as SharedVcsProvider,
+  VcsContext as SharedVcsContext,
+  VcsDiffResult as SharedVcsDiffResult,
+} from "@plannotator/shared/vcs-provider";
 
 // --- VCS Provider interface ---
 
@@ -143,10 +154,91 @@ const p4Provider: VcsProvider = {
   // P4 has no staging concept — stageFile/unstageFile intentionally omitted
 };
 
+// --- Plastic SCM provider ---
+
+/** Bun-specific runtime for shelling out to `cm` */
+const plasticRuntime: PlasticRuntime = {
+  async runCm(
+    args: string[],
+    options?: { cwd?: string },
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    const proc = Bun.spawn(["cm", ...args], {
+      cwd: options?.cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return { stdout, stderr, exitCode };
+  },
+  async readTextFile(path: string): Promise<string | null> {
+    try {
+      return await Bun.file(path).text();
+    } catch {
+      return null;
+    }
+  },
+};
+
+const PLASTIC_DIFF_TYPES = new Set(["pending", "last-changeset", "branch"]);
+
+/**
+ * Wraps the shared PlasticProvider (which uses VcsProvider from shared/) into
+ * the local VcsProvider interface used by the dispatch layer.
+ */
+function createPlasticDispatchProvider(): VcsProvider {
+  const shared = createPlasticProvider(plasticRuntime);
+
+  return {
+    id: "plastic",
+
+    async detect(cwd?: string): Promise<boolean> {
+      const vcsType = await detectVcsType(cwd);
+      return vcsType === "plastic";
+    },
+
+    ownsDiffType(diffType: string): boolean {
+      return PLASTIC_DIFF_TYPES.has(diffType);
+    },
+
+    async getContext(cwd?: string): Promise<GitContext> {
+      const ctx = await shared.getContext(cwd);
+      // Map VcsContext to GitContext (which is the common shape used in the UI)
+      return {
+        vcsType: "plastic",
+        currentBranch: ctx.currentBranch,
+        defaultBranch: ctx.defaultBranch,
+        diffOptions: ctx.diffOptions,
+        cwd: ctx.cwd,
+        supportsStaging: false,
+      } as GitContext;
+    },
+
+    async runDiff(diffType: DiffType, defaultBranch: string, cwd?: string): Promise<DiffResult> {
+      return shared.getDiff(diffType, defaultBranch, cwd);
+    },
+
+    async getFileContents(diffType, defaultBranch, filePath, _oldPath?, cwd?) {
+      return shared.getFileContents(diffType, defaultBranch, filePath, _oldPath, cwd);
+    },
+
+    // Plastic SCM has no staging concept — stageFile/unstageFile intentionally omitted
+
+    resolveCwd(_diffType: string, fallbackCwd?: string): string | undefined {
+      return fallbackCwd;
+    },
+  };
+}
+
+const plasticProvider = createPlasticDispatchProvider();
+
 // --- Provider registry ---
 
 /** Providers in detection priority order. First match wins. */
-const providers: VcsProvider[] = [gitProvider, p4Provider];
+const providers: VcsProvider[] = [plasticProvider, p4Provider, gitProvider];
 
 // Re-export types consumers need
 export type {

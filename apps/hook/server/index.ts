@@ -388,7 +388,7 @@ if (args[0] === "sessions") {
   } else {
     // --- Local Review Mode ---
     gitContext = await getVcsContext();
-    initialDiffType = gitContext.vcsType === "p4" ? "p4-default" : resolveDefaultDiffType(loadConfig());
+    initialDiffType = gitContext.vcsType === "p4" ? "p4-default" : (gitContext.vcsType === "plastic" ? "pending" : resolveDefaultDiffType(loadConfig()));
     const diffResult = await runVcsDiff(initialDiffType, gitContext.defaultBranch);
     rawPatch = diffResult.patch;
     gitRef = diffResult.label;

@@ -18,7 +18,7 @@ import {
   startAnnotateServer,
   handleAnnotateServerReady,
 } from "@plannotator/server/annotate";
-import { getGitContext, runGitDiffWithContext } from "@plannotator/server/git";
+import { getVcsContext, runVcsDiff } from "@plannotator/server/vcs";
 import { parsePRUrl, checkPRAuth, fetchPR, getCliName, getMRLabel, getMRNumberLabel, getDisplayRepo } from "@plannotator/server/pr";
 import { loadConfig, resolveDefaultDiffType, resolveUseJina } from "@plannotator/shared/config";
 import { resolveMarkdownFile } from "@plannotator/shared/resolve-file";
@@ -50,8 +50,8 @@ export async function handleReviewCommand(
   let rawPatch: string;
   let gitRef: string;
   let diffError: string | undefined;
-  let userDiffType: import("@plannotator/shared/config").DefaultDiffType | undefined;
-  let gitContext: Awaited<ReturnType<typeof getGitContext>> | undefined;
+  let userDiffType: string | undefined;
+  let gitContext: Awaited<ReturnType<typeof getVcsContext>> | undefined;
   let prMetadata: Awaited<ReturnType<typeof fetchPR>>["metadata"] | undefined;
 
   if (isPRMode) {
@@ -83,9 +83,9 @@ export async function handleReviewCommand(
   } else {
     client.app.log({ level: "info", message: "Opening code review UI..." });
 
-    gitContext = await getGitContext(directory);
-    userDiffType = resolveDefaultDiffType(loadConfig());
-    const diffResult = await runGitDiffWithContext(userDiffType, gitContext);
+    gitContext = await getVcsContext(directory);
+    userDiffType = gitContext.vcsType === "plastic" ? "pending" : resolveDefaultDiffType(loadConfig());
+    const diffResult = await runVcsDiff(userDiffType, gitContext.defaultBranch, gitContext.cwd);
     rawPatch = diffResult.patch;
     gitRef = diffResult.label;
     diffError = diffResult.error;

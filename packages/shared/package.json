@@ -25,7 +25,11 @@
     "./improvement-hooks": "./improvement-hooks.ts",
     "./worktree": "./worktree.ts",
     "./html-to-markdown": "./html-to-markdown.ts",
-    "./url-to-markdown": "./url-to-markdown.ts"
+    "./url-to-markdown": "./url-to-markdown.ts",
+    "./vcs-provider": "./vcs-provider.ts",
+    "./git-provider": "./git-provider.ts",
+    "./plastic-provider": "./plastic-provider.ts",
+    "./vcs-detect": "./vcs-detect.ts"
   },
   "dependencies": {
     "@joplin/turndown-plugin-gfm": "^1.0.64",

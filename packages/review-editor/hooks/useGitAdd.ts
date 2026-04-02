@@ -3,6 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 interface UseGitAddOptions {
   activeDiffBase: string;
   onFileViewed: (filePath: string) => void;
+  supportsStaging?: boolean;
 }
 
 interface UseGitAddReturn {
@@ -16,13 +17,13 @@ interface UseGitAddReturn {
 
 const STAGEABLE_DIFF_TYPES = new Set(['uncommitted', 'unstaged']);
 
-export function useGitAdd({ activeDiffBase, onFileViewed }: UseGitAddOptions): UseGitAddReturn {
+export function useGitAdd({ activeDiffBase, onFileViewed, supportsStaging = true }: UseGitAddOptions): UseGitAddReturn {
   const [stagedFiles, setStagedFiles] = useState<Set<string>>(new Set());
   const [stagingFile, setStagingFile] = useState<string | null>(null);
   const [stageError, setStageError] = useState<string | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const canStageFiles = STAGEABLE_DIFF_TYPES.has(activeDiffBase);
+  const canStageFiles = supportsStaging && STAGEABLE_DIFF_TYPES.has(activeDiffBase);
 
   // Use a ref so stageFile doesn't need stagedFiles in its dependency array
   const stagedFilesRef = useRef(stagedFiles);

@@ -16,7 +16,9 @@ export type DiffType =
   | "merge-base"
   | `worktree:${string}`
   | "p4-default"
-  | `p4-changelist:${string}`;
+  | `p4-changelist:${string}`
+  | "pending"
+  | "last-changeset";
 
 export interface DiffOption {
   id: string;
@@ -35,7 +37,8 @@ export interface GitContext {
   diffOptions: DiffOption[];
   worktrees: WorktreeInfo[];
   cwd?: string;
-  vcsType?: "git" | "p4";
+  vcsType?: "git" | "p4" | "plastic";
+  supportsStaging?: boolean;
 }
 
 export interface DiffResult {

@@ -676,7 +676,7 @@ const ReviewApp: React.FC = () => {
         if (data.error) setDiffError(data.error);
         if (data.isWSL) setIsWSL(true);
         // Mark diff type setup as pending on first run (local mode only)
-        if (data.diffType && !data.prMetadata && data.gitContext?.vcsType !== 'p4' && needsDiffTypeSetup()) {
+        if (data.diffType && !data.prMetadata && data.gitContext?.vcsType !== 'p4' && data.gitContext?.vcsType !== 'plastic' && needsDiffTypeSetup()) {
           setDiffTypeSetupPending(true);
         }
       })
@@ -1765,6 +1765,8 @@ const ReviewApp: React.FC = () => {
                           {activeDiffBase === 'unstaged' && "No unstaged changes. All changes are staged."}
                           {activeDiffBase === 'last-commit' && `No changes in the last commit${activeWorktreePath ? ' in this worktree' : ''}.`}
                           {activeDiffBase === 'branch' && `No changes vs ${gitContext?.defaultBranch || 'main'}${activeWorktreePath ? ' in this worktree' : ''}.`}
+                          {activeDiffBase === 'pending' && "No pending changes to review."}
+                          {activeDiffBase === 'last-changeset' && "No changes in the last changeset."}
                         </p>
                       </>
                     )}

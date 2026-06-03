@@ -26,6 +26,14 @@ All Plannotator environment variables and their defaults.
 
 \* If you use the VS Code extension, make sure `PLANNOTATOR_DATA_DIR` is visible to both your terminal and VS Code. On macOS, apps launched from the Dock don't inherit shell env vars — launch VS Code from the terminal (`code .`) or set the variable via `launchctl setenv`.
 
+## Glimpse (native window)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PLANNOTATOR_GLIMPSE` | enabled | Set to `0` or `false` to disable the Glimpse native window even when `glimpseui` is installed. Set to `1` or `true` to enable (this is the default). Can also be set via `~/.plannotator/config.json` (`{ "glimpse": false }`). |
+| `PLANNOTATOR_GLIMPSE_WIDTH` | `1280` | Width in pixels for the Glimpse native window. |
+| `PLANNOTATOR_GLIMPSE_HEIGHT` | `900` | Height in pixels for the Glimpse native window. |
+
 ## Annotation variables
 
 | Variable | Default | Description |

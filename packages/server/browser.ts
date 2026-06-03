@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { getPlannotatorDataDir } from "@plannotator/shared/data-dir";
+import { loadConfig, resolveUseGlimpse } from "@plannotator/shared/config";
 
 const IPC_REGISTRY = path.join(getPlannotatorDataDir(), "vscode-ipc.json");
 
@@ -184,7 +185,7 @@ export async function openBrowser(
       }
     }
 
-    if (options?.useGlimpse && !browser && !isRemote) {
+    if (options?.useGlimpse && !browser && !isRemote && resolveUseGlimpse(loadConfig())) {
       const openedViaGlimpse = await openGlimpse(url);
       if (openedViaGlimpse) {
         return true;

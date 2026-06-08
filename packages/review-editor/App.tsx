@@ -173,6 +173,9 @@ const ReviewApp: React.FC = () => {
   const [selectedBase, setSelectedBase] = useState<string | null>(null);
   const [committedBase, setCommittedBase] = useState<string | null>(null);
   const [agentCwd, setAgentCwd] = useState<string | null>(null);
+  // Plastic SCM only: drives heartbeat, Ctrl+Enter confirm, close beacon, and
+  // the diff-type-setup skip. Sourced from gitContext.vcsType.
+  const [vcsType, setVcsType] = useState<string | undefined>();
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
@@ -181,6 +184,8 @@ const ReviewApp: React.FC = () => {
   const [submitted, setSubmitted] = useState<'approved' | 'feedback' | 'exited' | false>(false);
   const [showApproveWarning, setShowApproveWarning] = useState(false);
   const [showExitWarning, setShowExitWarning] = useState(false);
+  // Plastic SCM only: confirm dialog before Ctrl+Enter approve/feedback.
+  const [showReviewConfirm, setShowReviewConfirm] = useState<'approve' | 'feedback' | false>(false);
   const [sharingEnabled, setSharingEnabled] = useState(true);
   const [repoInfo, setRepoInfo] = useState<{ display: string; branch?: string } | null>(null);
 
@@ -826,6 +831,7 @@ const ReviewApp: React.FC = () => {
         if (data.diffType) setDiffType(data.diffType);
         if (data.gitContext) {
           setGitContext(data.gitContext);
+          setVcsType(data.gitContext.vcsType);
           // Prefer the server's active base (survives page refresh / reconnect)
           // over the detected default, so the picker rehydrates to what the
           // server is actually using.
@@ -851,7 +857,7 @@ const ReviewApp: React.FC = () => {
         if (data.error) setDiffError(data.error);
         if (data.isWSL) setIsWSL(true);
         // Mark diff type setup as pending on first run (local mode only)
-        if (data.diffType && data.mode !== 'workspace' && !data.prMetadata && data.gitContext && data.gitContext.vcsType !== 'p4' && data.gitContext.vcsType !== 'jj' && needsDiffTypeSetup()) {
+        if (data.diffType && data.mode !== 'workspace' && !data.prMetadata && data.gitContext && data.gitContext.vcsType !== 'p4' && data.gitContext.vcsType !== 'jj' && data.gitContext.vcsType !== 'plastic' && needsDiffTypeSetup()) {
           setDiffTypeSetupPending(true);
         }
       })
@@ -876,6 +882,18 @@ const ReviewApp: React.FC = () => {
       setShowDiffTypeSetup(true);
     }
   }, [diffTypeSetupPending]);
+
+  // Plastic SCM only: send a heartbeat to keep the server alive while this tab
+  // is open. The server auto-shuts down ~10s after heartbeats stop (e.g. the
+  // tab was closed without submitting). No-op for git/jj/p4.
+  useEffect(() => {
+    if (vcsType !== 'plastic') return;
+    fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    const interval = setInterval(() => {
+      fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    }, 3_000);
+    return () => clearInterval(interval);
+  }, [vcsType]);
 
   const handleDiffStyleChange = useCallback((style: 'split' | 'unified') => {
     configStore.set('diffStyle', style);
@@ -1755,7 +1773,7 @@ const ReviewApp: React.FC = () => {
 
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (showExportModal || showNoAnnotationsDialog || showApproveWarning || showExitWarning) return;
+      if (showExportModal || showNoAnnotationsDialog || showApproveWarning || showExitWarning || showReviewConfirm) return;
       if (submitted || isSendingFeedback || isApproving || isExiting || isPlatformActioning) return;
       if (!origin) return; // Demo mode
 
@@ -1768,6 +1786,13 @@ const ReviewApp: React.FC = () => {
           openPlatformDialog('approve');
         } else {
           openPlatformDialog('comment');
+        }
+      } else if (vcsType === 'plastic') {
+        // Plastic SCM: confirm before approve/feedback via Ctrl+Enter.
+        if (totalAnnotationCount === 0) {
+          setShowReviewConfirm('approve');
+        } else {
+          setShowReviewConfirm('feedback');
         }
       } else {
         // Agent mode: No annotations → Approve, otherwise → Send Feedback
@@ -1782,11 +1807,11 @@ const ReviewApp: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    showExportModal, showNoAnnotationsDialog, showApproveWarning, showExitWarning,
+    showExportModal, showNoAnnotationsDialog, showApproveWarning, showExitWarning, showReviewConfirm,
     platformCommentDialog, platformGeneralComment,
     submitted, isSendingFeedback, isApproving, isExiting, isPlatformActioning,
     origin, platformMode, platformLabel, platformUser, prMetadata, totalAnnotationCount, openPlatformDialog,
-    handleApprove, handleSendFeedback, handlePlatformAction
+    vcsType, handleApprove, handleSendFeedback, handlePlatformAction
   ]);
 
   if (isLoading) {
@@ -2275,6 +2300,9 @@ const ReviewApp: React.FC = () => {
                           {activeDiffBase === 'branch' && `No changes vs ${selectedBase || gitContext?.defaultBranch || 'main'}${activeWorktreePath ? ' in this worktree' : ''}.`}
                           {activeDiffBase === 'merge-base' && `No changes vs ${selectedBase || gitContext?.defaultBranch || 'main'}${activeWorktreePath ? ' in this worktree' : ''}.`}
                           {activeDiffBase === 'all' && `No tracked files${activeWorktreePath ? ' in this worktree' : ' in this repository'}.`}
+                          {activeDiffBase === 'pending' && "No pending changes to review."}
+                          {activeDiffBase === 'last-changeset' && "No changes in the last changeset."}
+                          {activeDiffBase === 'plastic-branch' && `No changes vs ${gitContext?.defaultBranch || 'main'}.`}
                         </p>
                       </>
                     )}
@@ -2454,6 +2482,29 @@ const ReviewApp: React.FC = () => {
           showCancel
         />
 
+        {/* Plastic SCM: confirm before approve/feedback via Ctrl+Enter */}
+        <ConfirmDialog
+          isOpen={!!showReviewConfirm}
+          onClose={() => setShowReviewConfirm(false)}
+          onConfirm={() => {
+            const action = showReviewConfirm;
+            setShowReviewConfirm(false);
+            if (action === 'approve') {
+              handleApprove();
+            } else {
+              handleSendFeedback();
+            }
+          }}
+          title={showReviewConfirm === 'approve' ? 'Approve Changes?' : 'Send Feedback?'}
+          message={showReviewConfirm === 'approve'
+            ? 'Approve changes with no annotations?'
+            : `Send ${totalAnnotationCount} annotation${totalAnnotationCount !== 1 ? 's' : ''} as feedback?`}
+          confirmText={showReviewConfirm === 'approve' ? 'Approve' : 'Send'}
+          cancelText="Cancel"
+          variant="info"
+          showCancel
+        />
+
         {/* Diff type setup dialog — first-run only */}
         {showDiffTypeSetup && (
           <DiffTypeSetupDialog
@@ -2484,6 +2535,7 @@ const ReviewApp: React.FC = () => {
                   : `${getAgentName(origin)} will address your review feedback.`
           }
           agentLabel={getAgentName(origin)}
+          notifyClose={vcsType === 'plastic'}
         />
 
         {/* GitHub general comment dialog */}

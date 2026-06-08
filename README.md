@@ -6,6 +6,8 @@
 
 Review AI-agent plans and code diffs in a browser. Add inline annotations, send structured feedback back to your agent, and share encrypted review links with teammates. Works with **Claude Code**, **Copilot CLI**, **Gemini CLI**, **OpenCode**, **Pi**, **Codex**, **Droid**, and **Amp**.
 
+> **This fork adds [Plastic SCM (Unity DevOps Version Control)](#plastic-scm-unity-devops-support) support** — the code review feature works with both Git and Plastic SCM repositories. The VCS is auto-detected via `.plastic`/`.git` presence and routed through the matching provider. Everything else tracks upstream unchanged.
+
 **Plan Mode Demos:**
 <table>
 <tr>
@@ -43,6 +45,7 @@ Review AI-agent plans and code diffs in a browser. Add inline annotations, send 
 <tr><td><strong>Code Review</strong></td><td><code>/plannotator-review</code></td><td>View git diffs or remote PRs. Package annotations and ask AI about the code as you review.</td></tr>
 <tr><td><strong>Annotate Any File</strong></td><td><code>/plannotator-annotate &lt;file|folder|url&gt;</code></td><td>Annotate markdown, HTML, URLs, or folders, ask AI about the active document, and send feedback to your agent</td></tr>
 <tr><td><strong>Annotate Last Message</strong></td><td><code>/plannotator-last</code></td><td>Annotate the agent's last response and send structured feedback</td></tr>
+<tr><td><strong>Plastic SCM Support</strong> (fork)</td><td>Auto-detect</td><td>Full code review for Plastic SCM (Unity DevOps) repos via the <code>cm</code> CLI</td></tr>
 </table>
 
 #### Sharing Plans
@@ -55,6 +58,43 @@ Plannotator lets you privately share plans, annotations, and feedback with colle
 
 - Zero-knowledge storage, similar to [PrivateBin](https://privatebin.info/)
 - Fully open source and **self-hostable** ([see docs](https://plannotator.ai/docs/guides/sharing-and-collaboration/))
+
+---
+
+## Plastic SCM (Unity DevOps) Support
+
+This fork plugs a **Plastic SCM** provider into upstream's VCS abstraction so the
+code review feature works with both **Git** and **Plastic SCM** repositories
+(alongside upstream's Git, Jujutsu, and Perforce support).
+
+- **Auto-detection**: checks for a `.plastic` (or `.git`) workspace root and routes through the matching provider
+- **`cm` CLI integration**: uses the Plastic `cm` command-line tool to compute pending/changeset/branch diffs and generate unified diffs (Plastic's `cm diff` does not emit unified diffs itself)
+- **No staging UI**: Plastic has no staging area, so the stage/unstage UI is automatically hidden
+- **Browser heartbeat** (Plastic only): the review server stays alive while the browser tab is open (3s heartbeat) and auto-shuts down ~10s after the tab closes
+- **Ctrl+Enter confirmation** (Plastic only): shows a confirm dialog before submitting feedback to prevent accidental submission
+
+All fork behavior is gated on `vcsType === "plastic"`; Git/JJ/P4 sessions are untouched.
+
+**Requirements**: the `cm` CLI must be on your `PATH` (installed with Unity DevOps Version Control / Plastic SCM).
+
+### Fork: Build from Source
+
+```bash
+bun install
+bun run --cwd apps/review build && bun run build:hook
+```
+
+**Compile to a single binary (optional):**
+
+```bash
+# macOS / Linux
+bun build apps/hook/server/index.ts --compile --outfile ~/.local/bin/plannotator
+
+# Windows
+bun build apps/hook/server/index.ts --compile --outfile plannotator.exe
+```
+
+---
 
 ## Install
 
@@ -311,6 +351,8 @@ This project is licensed under either of
 - [MIT license](LICENSE-MIT) ([http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
 
 at your option.
+
+This fork is based on [backnotprop/plannotator](https://github.com/backnotprop/plannotator) and adds Plastic SCM support.
 
 ### Contribution
 

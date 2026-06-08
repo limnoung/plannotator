@@ -447,6 +447,17 @@ export async function startReviewServer(
     resolveDecision = resolve;
   });
 
+  // Plastic SCM only: client heartbeat → auto-shutdown when the browser
+  // disconnects. The review-editor POSTs /api/heartbeat every 3s; once the
+  // first heartbeat arrives the monitor starts, and if none arrives within
+  // HEARTBEAT_TIMEOUT_MS the server resolves the decision and shuts down.
+  // Plastic's `cm` integration otherwise hangs waiting for a decision when
+  // the user just closes the browser tab. Git/jj/p4 sessions are unaffected.
+  const heartbeatEnabled = sessionVcsType === "plastic";
+  const HEARTBEAT_TIMEOUT_MS = 10_000;
+  let lastHeartbeat = 0; // 0 = no heartbeat received yet
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
   // Start server with retry logic
   let server: ReturnType<typeof Bun.serve> | null = null;
 
@@ -458,6 +469,17 @@ export async function startReviewServer(
 
         async fetch(req, server) {
           const url = new URL(req.url);
+
+          // Plastic SCM only: client heartbeat keeps the server alive while the
+          // browser is open; /api/close lets the page-hide beacon stop it.
+          if (heartbeatEnabled && url.pathname === "/api/heartbeat" && req.method === "POST") {
+            lastHeartbeat = Date.now();
+            return Response.json({ ok: true });
+          }
+          if (heartbeatEnabled && url.pathname === "/api/close" && req.method === "POST") {
+            resolveDecision({ approved: false, feedback: "", annotations: [] });
+            return Response.json({ ok: true });
+          }
 
           // API: Get tour result
           if (url.pathname.match(/^\/api\/tour\/[^/]+$/) && req.method === "GET") {
@@ -1208,6 +1230,19 @@ export async function startReviewServer(
   const exitHandler = () => agentJobs.killAll();
   process.once("exit", exitHandler);
 
+  // Plastic SCM only: begin the heartbeat watchdog. It only starts counting
+  // after the first heartbeat arrives, so a slow initial page load can't
+  // trigger an early shutdown.
+  if (heartbeatEnabled) {
+    heartbeatTimer = setInterval(() => {
+      if (lastHeartbeat > 0 && Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+        resolveDecision({ approved: false, feedback: "", annotations: [] });
+      }
+    }, 2_000);
+  }
+
   // Notify caller that server is ready
   if (onReady) {
     onReady(serverUrl, isRemote, port);
@@ -1219,6 +1254,7 @@ export async function startReviewServer(
     isRemote,
     waitForDecision: () => decisionPromise,
     stop: () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       process.removeListener("exit", exitHandler);
       agentJobs.killAll();
       aiRuntime.dispose();

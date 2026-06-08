@@ -60,7 +60,7 @@ export interface VcsProvider {
   detectRemoteDefaultCompareTarget?(cwd?: string): Promise<string | null>;
 }
 
-export type VcsSelection = "auto" | "git" | "jj" | "p4";
+export type VcsSelection = "auto" | "git" | "jj" | "p4" | "plastic";
 
 export interface VcsApi {
   detectVcs(cwd?: string): Promise<VcsProvider>;
@@ -315,6 +315,8 @@ export function createVcsApi(providers: readonly VcsProvider[]): VcsApi {
         return "JJ";
       case "p4":
         return "P4";
+      case "plastic":
+        return "Plastic";
     }
   }
 
@@ -472,6 +474,9 @@ export function resolveInitialDiffType(
   }
   if (gitContext.vcsType === "jj") {
     return "jj-current";
+  }
+  if (gitContext.vcsType === "plastic") {
+    return "pending";
   }
   if (gitContext.diffOptions.some((option) => option.id === configuredDiffType)) {
     return configuredDiffType;

@@ -24,7 +24,11 @@ export type DiffType =
   | "all"
   | `worktree:${string}`
   | "p4-default"
-  | `p4-changelist:${string}`;
+  | `p4-changelist:${string}`
+  // Plastic SCM (fork) — see plastic-provider.ts
+  | "pending"
+  | "last-changeset"
+  | "plastic-branch";
 
 export interface DiffOption {
   id: string;
@@ -93,7 +97,7 @@ export interface GitContext {
   compareTarget?: CompareTargetConfig;
   repository?: RepositoryContext;
   cwd?: string;
-  vcsType?: "git" | "jj" | "p4";
+  vcsType?: "git" | "jj" | "p4" | "plastic";
   /** Evolution log entries for the current jj change (jj only). */
   jjEvologs?: JjEvoLogEntry[];
   /** HEAD ancestry, newest first. Powers the commit-based baseline picker (#709). */
